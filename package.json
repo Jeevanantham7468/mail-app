@@ -1,0 +1,21 @@
+{
+  "name": "bulk-mail-mern-app",
+  "version": "1.0.0",
+  "description": "Full Stack Bulk Mail Application (React + Node/Express + MongoDB)",
+  "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "start": "node server/server.js",
+    "server": "cd server && npm start",
+    "client": "cd client && npm run dev"
+  },
+  "keywords": [
+    "mern",
+    "bulk-mailer",
+    "nodemailer",
+    "mongodb",
+    "react",
+    "express"
+  ],
+  "author": "Jeevanantham",
+  "license": "ISC"
+}
