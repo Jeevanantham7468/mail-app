@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import EmailLog from '../models/EmailLog.js';
 import { sendBulkEmails, verifySmtpConnection } from '../services/mailService.js';
 
@@ -72,8 +73,8 @@ export const sendBulkMail = async (req, res) => {
       smtpConfig: activeSmtp
     });
 
-    // Save history record to MongoDB
-    const emailRecord = await EmailLog.create({
+    // Save history record to MongoDB safely
+    let emailRecord = {
       subject,
       body,
       recipients: validEmails,
@@ -84,8 +85,19 @@ export const sendBulkMail = async (req, res) => {
       results,
       smtpUsed,
       previewUrl: primaryPreviewUrl,
-      sentBy: req.user ? req.user._id : null
-    });
+      createdAt: new Date()
+    };
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        emailRecord = await EmailLog.create({
+          ...emailRecord,
+          sentBy: req.user ? req.user._id : null
+        });
+      }
+    } catch (dbErr) {
+      console.error('Failed to save to MongoDB:', dbErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -107,6 +119,16 @@ export const getMailHistory = async (req, res) => {
   try {
     const { status, search, page = 1, limit = 50 } = req.query;
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({
+        success: true,
+        total: 0,
+        page: 1,
+        pages: 0,
+        data: []
+      });
+    }
+
     const filter = {};
     if (status && status !== 'all') {
       filter.status = status;
@@ -119,8 +141,8 @@ export const getMailHistory = async (req, res) => {
       ];
     }
 
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 50;
     const skip = (pageNum - 1) * limitNum;
 
     const [emails, total] = await Promise.all([
@@ -147,6 +169,9 @@ export const getMailHistory = async (req, res) => {
 // Get single email details by ID
 export const getMailById = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(404).json({ success: false, message: 'Database not connected' });
+    }
     const email = await EmailLog.findById(req.params.id).populate('sentBy', 'name email');
     if (!email) {
       return res.status(404).json({ success: false, message: 'Email log not found' });
@@ -160,6 +185,9 @@ export const getMailById = async (req, res) => {
 // Delete single email history entry
 export const deleteMailLog = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(404).json({ success: false, message: 'Database not connected' });
+    }
     const email = await EmailLog.findByIdAndDelete(req.params.id);
     if (!email) {
       return res.status(404).json({ success: false, message: 'Email log not found' });
@@ -183,6 +211,19 @@ export const verifySmtp = async (req, res) => {
 // Get overall stats for dashboard
 export const getStats = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({
+        success: true,
+        stats: {
+          totalCampaigns: 0,
+          totalEmails: 0,
+          totalSuccess: 0,
+          totalFailed: 0,
+          successRate: 0
+        }
+      });
+    }
+
     const totalCampaigns = await EmailLog.countDocuments();
     const aggregateData = await EmailLog.aggregate([
       {

@@ -34,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/mail', mailRoutes);
 
@@ -46,7 +46,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve frontend build in production if available
+// Catch-all for API 404s so /api/* NEVER returns HTML
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API route ${req.method} ${req.originalUrl} not found`
+  });
+});
+
+// Serve frontend build in production
 const clientDist = path.join(__dirname, '../client/dist');
 app.use(express.static(clientDist));
 
@@ -59,7 +67,7 @@ app.get('*', (req, res, next) => {
   });
 });
 
-// Error handling middleware
+// Error handling middleware (always returns JSON)
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({

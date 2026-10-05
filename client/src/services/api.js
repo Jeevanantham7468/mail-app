@@ -13,7 +13,7 @@ const getHeaders = (hasBody = true) => {
   return headers;
 };
 
-// Generic fetch wrapper with error handling
+// Generic fetch wrapper with robust error and content-type handling
 const request = async (endpoint, options = {}) => {
   const config = {
     ...options,
@@ -24,10 +24,27 @@ const request = async (endpoint, options = {}) => {
   };
 
   const response = await fetch(`${API_BASE}${endpoint}`, config);
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+
+  let data;
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    // Non-JSON response (e.g. Render spinning up 502/503 HTML or 404 page)
+    if (!response.ok) {
+      if (response.status === 502 || response.status === 503) {
+        throw new Error('Backend server is waking up on Render (free tier cold start). Please wait 10 seconds and try again.');
+      }
+      if (response.status === 404) {
+        throw new Error('API endpoint not found (404). Please ensure backend is running.');
+      }
+      throw new Error(`Server returned status ${response.status}.`);
+    }
+    throw new Error('Received unexpected HTML response from server instead of JSON.');
+  }
 
   if (!response.ok) {
-    throw new Error(data.message || `Request failed with status ${response.status}`);
+    throw new Error(data?.message || `Request failed with status ${response.status}`);
   }
 
   return data;
