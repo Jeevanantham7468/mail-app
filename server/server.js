@@ -15,7 +15,13 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bulk_mailer_db';
+let MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bulk_mailer_db';
+
+// Automatically clean up accidental port number in mongodb+srv:// URIs
+// (e.g. mongodb+srv://user:pass@cluster.mongodb.net:27017/db -> mongodb+srv://user:pass@cluster.mongodb.net/db)
+if (MONGO_URI.startsWith('mongodb+srv://')) {
+  MONGO_URI = MONGO_URI.replace(/:[0-9]+(?=[\/\?]|$)/, '');
+}
 
 // Middleware
 app.use(cors());
@@ -62,17 +68,21 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Connect to MongoDB and start express server
+// Start Express server immediately so Render detects the open port
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Connect to MongoDB asynchronously
 mongoose
   .connect(MONGO_URI)
   .then(async () => {
-    console.log(`Connected to MongoDB at ${MONGO_URI}`);
+    console.log(`Connected to MongoDB successfully`);
     await seedDefaultAdmin();
-
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
   })
   .catch((err) => {
     console.error('Failed to connect to MongoDB:', err.message);
+    if (err.message && err.message.includes('port number')) {
+      console.error('Tip: mongodb+srv:// URIs from MongoDB Atlas must not contain a port number like :27017.');
+    }
   });
